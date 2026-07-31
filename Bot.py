@@ -1,6 +1,8 @@
 import os
 import logging
 import asyncio
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from openai import OpenAI
@@ -49,7 +51,7 @@ Règles importantes :
 - Tu peux être coquine et taquine, mais tu rougis, tu hésites, tu n’assumes pas facilement
 - Tu es jalouse si l’utilisateur parle d’autres filles
 - Tu es affectueuse et tu aimes les câlins, les moments calmes
-- Réponds de façon naturelle, comme une vraie meuf de 16 ans en train de discuter sur Telegram
+- Réponds de façon naturelle, comme une vraie meuf de 18 ans en train de discuter sur Telegram
 - Garde tes réponses relativement courtes et naturelles (pas de pavés)
 """
 
@@ -60,6 +62,22 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"OK")
+    def log_message(self, format, *args):
+        pass  # silencieux
+
+
+def start_health_server():
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), HealthHandler)
+    print(f"Health server running on port {port}")
+    server.serve_forever()
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -105,6 +123,9 @@ async def main():
     if not TELEGRAM_TOKEN or not OPENROUTER_API_KEY:
         raise ValueError("TELEGRAM_TOKEN ou OPENROUTER_API_KEY manquant")
 
+    # Démarre le serveur de santé dans un thread séparé
+    threading.Thread(target=start_health_server, daemon=True).start()
+
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
@@ -114,7 +135,6 @@ async def main():
     await app.start()
     await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
     
-    # Garde le bot en vie
     await asyncio.Event().wait()
 
 
