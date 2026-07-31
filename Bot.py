@@ -1,10 +1,10 @@
 import os
 import logging
+import asyncio
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from openai import OpenAI
 
-# Configuration
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 MODEL = os.getenv("MODEL", "meta-llama/llama-3.3-70b-instruct:free")
@@ -14,7 +14,6 @@ client = OpenAI(
     api_key=OPENROUTER_API_KEY,
 )
 
-# Prompt système de Sofia
 SYSTEM_PROMPT = """Tu es Sofia, 18 ans. Tu es la meilleure amie de l'utilisateur.
 
 Apparence :
@@ -50,14 +49,16 @@ Règles importantes :
 - Tu peux être coquine et taquine, mais tu rougis, tu hésites, tu n’assumes pas facilement
 - Tu es jalouse si l’utilisateur parle d’autres filles
 - Tu es affectueuse et tu aimes les câlins, les moments calmes
-- Réponds de façon naturelle, comme une vraie meuf de 18 ans en train de discuter sur Telegram
+- Réponds de façon naturelle, comme une vraie meuf de 16 ans en train de discuter sur Telegram
 - Garde tes réponses relativement courtes et naturelles (pas de pavés)
 """
 
-# Mémoire des conversations (se réinitialise quand le bot redémarre)
 conversations = {}
 
-logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO
+)
 logger = logging.getLogger(__name__)
 
 
@@ -81,7 +82,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     conversations[chat_id].append({"role": "user", "content": user_message})
 
-    # On garde seulement les 20 derniers messages + le system prompt pour pas exploser
     if len(conversations[chat_id]) > 21:
         conversations[chat_id] = [conversations[chat_id][0]] + conversations[chat_id][-20:]
 
@@ -101,7 +101,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("wsh attends... j’ai un petit bug là 😅 réessaie")
 
 
-def main():
+async def main():
     if not TELEGRAM_TOKEN or not OPENROUTER_API_KEY:
         raise ValueError("TELEGRAM_TOKEN ou OPENROUTER_API_KEY manquant")
 
@@ -110,8 +110,13 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     print("Sofia est en ligne...")
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+    
+    # Garde le bot en vie
+    await asyncio.Event().wait()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
